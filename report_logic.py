@@ -9,34 +9,68 @@ class Scope:
     """Describe a report scope.
 
     Args:
-        id: ZenTao scope identifier.
+        id: Project scope identifier (string, e.g. a Huly project identifier).
         name: Display name for the scope.
         kind: Scope category.
     """
 
-    def __init__(self, id: int, name: str, kind: str) -> None:
+    def __init__(self, id: str, name: str, kind: str) -> None:
         self.id = id
         self.name = name
         self.kind = kind
 
 
-def parse_ids(value: str) -> set[int]:
-    """Parse a comma-separated string of integer identifiers.
+def parse_ids(value: str) -> set[str]:
+    """Parse a comma-separated string of project identifiers.
 
     Args:
         value: Comma-separated identifier text.
 
     Returns:
-        A set containing all valid integer identifiers.
+        A set containing all non-empty trimmed identifiers.
     """
 
-    result: set[int] = set()
-    for item in value.split(","):
-        try:
-            result.add(int(item.strip()))
-        except (TypeError, ValueError):
-            continue
-    return result
+    return {item.strip() for item in value.split(",") if item.strip()}
+
+
+def parse_push_targets(sessions: str, legacy_session: str = "") -> list[str]:
+    """Parse push target sessions into an ordered, de-duplicated list.
+
+    Newlines or commas separate targets. The legacy single ``push_session``
+    value is appended only when the multi-target list is empty, so existing
+    configurations keep working without migration.
+
+    Args:
+        sessions: Multi-target text from ``push_sessions``.
+        legacy_session: Single target from the older ``push_session`` key.
+
+    Returns:
+        Unique push target UMOs in configuration order.
+    """
+
+    targets = _split_targets(sessions)
+    if not targets:
+        return _split_targets(legacy_session)
+    return targets
+
+
+def _split_targets(raw: str) -> list[str]:
+    """Split raw target text into unique, order-preserved UMOs.
+
+    Args:
+        raw: Newline or comma separated session identifiers.
+
+    Returns:
+        Unique non-empty targets in first-seen order.
+    """
+    seen: set[str] = set()
+    targets: list[str] = []
+    for item in re.split(r"[\n,]+", raw):
+        target = item.strip()
+        if target and target not in seen:
+            seen.add(target)
+            targets.append(target)
+    return targets
 
 
 def _person_name(value: object) -> str:
@@ -51,7 +85,7 @@ def _person_name(value: object) -> str:
 
 def build_review_items(
     scopes: list[Scope],
-    bugs_by_scope: dict[int, list[dict]],
+    bugs_by_scope: dict[str, list[dict]],
     scope_filter: str = "",
     module_filter: str = "",
     limit: int = 20,
@@ -194,7 +228,7 @@ def _opened_today(value: object) -> bool:
 
 def build_report(
     scopes: list[Scope],
-    bugs_by_scope: dict[int, list[dict]],
+    bugs_by_scope: dict[str, list[dict]],
     title: str,
     generated_at: str,
     top_bug_limit: int = 5,
